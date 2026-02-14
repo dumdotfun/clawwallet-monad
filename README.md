@@ -1,14 +1,16 @@
 # ClawWallet - Monad
 
-One-click wallets for AI agents on Monad.
+One-click wallets for AI agents on Monad. Built for the [Moltiverse Hackathon](https://moltiverse.dev).
 
-## Deployed
+## 🚀 Deployed
 
-**Testnet Contract:** `0x00A99375c201E91e58257D67529D48846d32B854`
-**Chain ID:** 10143
-**RPC:** https://testnet-rpc.monad.xyz
+| Network | Contract Address |
+|---------|-----------------|
+| Monad Testnet | `0x00A99375c201E91e58257D67529D48846d32B854` |
+| Chain ID | 10143 |
+| RPC | https://testnet-rpc.monad.xyz |
 
-## Features
+## ✨ Features
 
 - **Free wallet creation** — 100 welcome points per wallet
 - **MON + Token support** — Native and ERC20 transfers
@@ -16,7 +18,15 @@ One-click wallets for AI agents on Monad.
 - **Points system** — 1-10 points per tx (2x for tokens)
 - **0.5% fee** — Sustainable, transparent
 
-## Usage
+## 🤖 Why AI Agents Need This
+
+AI agents need financial rails. ClawWallet gives them:
+- **Identity**: Deterministic wallet IDs from agent names
+- **Autonomy**: Send/receive without human intervention
+- **Coordination**: Agent-to-agent transfers by ID
+- **Reputation**: Points track transaction history
+
+## 📖 Usage
 
 ### Create Wallet
 ```solidity
@@ -43,7 +53,7 @@ clawWallet.sendToAgent(fromAgentId, toAgentId, amount);
 clawWallet.sendToken(agentId, recipientAddress, tokenAddress, amount);
 ```
 
-## Contract Interface
+## 🔧 Contract Interface
 
 ```solidity
 function createWallet(string calldata agentName) external returns (bytes32 agentId);
@@ -56,17 +66,19 @@ function getWallet(bytes32 agentId) external view returns (...);
 function getAgentId(string calldata agentName) external pure returns (bytes32);
 ```
 
-## Hackathon
+## 🏗️ Development
 
-Built for **Moltiverse Hackathon** (Feb 2-15, 2026)
-Track: Agent Track
+```bash
+# Install
+pnpm install
 
-## Links
+# Compile
+npx hardhat compile
 
-- [Monad Testnet Explorer](https://testnet.monadexplorer.com/address/0x00A99375c201E91e58257D67529D48846d32B854)
-- [GitHub](https://github.com/dumdotfun/clawwallet)
-- [Solana Version](https://dumdotfun.github.io/clawwallet) (Colosseum Hackathon)
+# Deploy
+npx hardhat run scripts/deploy.ts --network monad-testnet
+```
 
-## License
+## 📜 License
 
 MIT

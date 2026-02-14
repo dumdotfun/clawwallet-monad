@@ -27,6 +27,16 @@ const config: HardhatUserConfig = {
       chainId: 143,
       accounts: [PRIVATE_KEY],
     },
+    baseSepolia: {
+      url: "https://sepolia.base.org",
+      chainId: 84532,
+      accounts: [PRIVATE_KEY],
+    },
+    baseMainnet: {
+      url: "https://mainnet.base.org",
+      chainId: 8453,
+      accounts: [PRIVATE_KEY],
+    },
   },
 };
 
