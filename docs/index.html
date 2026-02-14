@@ -166,6 +166,30 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
                 return;
             }
             try {
+                // First try to switch to Monad testnet
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x279F' }], // 10143 in hex
+                    });
+                } catch (switchError) {
+                    // If network doesn't exist, add it
+                    if (switchError.code === 4902) {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: '0x279F',
+                                chainName: 'Monad Testnet',
+                                nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+                                rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                                blockExplorerUrls: ['https://testnet.monadexplorer.com']
+                            }],
+                        });
+                    } else {
+                        throw switchError;
+                    }
+                }
+                
                 await window.ethereum.request({ method: 'eth_requestAccounts' });
                 provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
@@ -175,7 +199,7 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
                 document.getElementById('connectBtn').textContent = '✅ Connected';
             } catch (e) {
                 console.error(e);
-                alert('Connection failed');
+                alert('Connection failed: ' + (e.message || e));
             }
         };
 
