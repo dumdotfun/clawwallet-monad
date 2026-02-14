@@ -170,19 +170,39 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
             const statusEl = document.getElementById('walletStatus');
             const btnEl = document.getElementById('connectBtn');
             
-            statusEl.textContent = 'Connecting...';
+            statusEl.textContent = 'Detecting wallet...';
+            console.log('Connect clicked');
+            console.log('window.ethereum:', window.ethereum);
+            console.log('window.phantom:', window.phantom);
             
-            // Try to find any available wallet
-            const wallet = window.phantom?.ethereum || window.ethereum;
+            // Try to find any available wallet - check multiple places
+            let wallet = null;
+            
+            // Check for various wallet providers
+            if (window.ethereum?.isPhantom) {
+                wallet = window.ethereum;
+                console.log('Found Phantom via ethereum.isPhantom');
+            } else if (window.phantom?.ethereum) {
+                wallet = window.phantom.ethereum;
+                console.log('Found Phantom via phantom.ethereum');
+            } else if (window.ethereum) {
+                wallet = window.ethereum;
+                console.log('Found generic ethereum provider');
+            }
             
             if (!wallet) {
                 statusEl.innerHTML = '❌ No wallet found. <a href="https://phantom.app/" target="_blank" class="text-pink-400 underline">Get Phantom</a> or <a href="https://metamask.io/" target="_blank" class="text-pink-400 underline">MetaMask</a>';
+                console.log('No wallet found');
                 return;
             }
             
+            statusEl.textContent = 'Requesting accounts...';
+            
             try {
                 // Request accounts
+                console.log('Requesting accounts...');
                 const accounts = await wallet.request({ method: 'eth_requestAccounts' });
+                console.log('Accounts:', accounts);
                 
                 if (!accounts || accounts.length === 0) {
                     statusEl.textContent = '❌ No accounts found';
@@ -230,9 +250,14 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
                 }
             } catch (e) {
                 console.error('Connection error:', e);
-                statusEl.textContent = '❌ ' + (e.message || 'Connection failed');
+                statusEl.textContent = '❌ ' + (e.code ? `[${e.code}] ` : '') + (e.message || 'Connection failed');
             }
         };
+        
+        // Log on page load
+        console.log('Page loaded. Checking for wallets...');
+        console.log('ethereum:', typeof window.ethereum);
+        console.log('phantom:', typeof window.phantom);
 
         // Create wallet
         document.getElementById('createBtn').onclick = async () => {
