@@ -161,37 +161,44 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
         let provider, signer, contract;
 
         document.getElementById('connectBtn').onclick = async () => {
-            if (typeof window.ethereum === 'undefined') {
-                alert('Please install MetaMask!');
+            // Support Phantom, MetaMask, or any injected wallet
+            const wallet = window.phantom?.ethereum || window.ethereum;
+            if (!wallet) {
+                alert('Please install a Web3 wallet (Phantom, MetaMask, etc.)');
                 return;
             }
             try {
-                // First try to switch to Monad testnet
-                try {
-                    await window.ethereum.request({
-                        method: 'wallet_switchEthereumChain',
-                        params: [{ chainId: '0x279F' }], // 10143 in hex
-                    });
-                } catch (switchError) {
-                    // If network doesn't exist, add it
-                    if (switchError.code === 4902) {
-                        await window.ethereum.request({
-                            method: 'wallet_addEthereumChain',
-                            params: [{
-                                chainId: '0x279F',
-                                chainName: 'Monad Testnet',
-                                nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
-                                rpcUrls: ['https://testnet-rpc.monad.xyz'],
-                                blockExplorerUrls: ['https://testnet.monadexplorer.com']
-                            }],
-                        });
-                    } else {
-                        throw switchError;
+                await wallet.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.providers.Web3Provider(wallet);
+                
+                // Check if on Monad testnet
+                const network = await provider.getNetwork();
+                if (network.chainId !== 10143) {
+                    const addNetwork = confirm('Switch to Monad Testnet? (Chain ID: 10143)\n\nClick OK to add/switch, or Cancel to stay on current network.');
+                    if (addNetwork) {
+                        try {
+                            await wallet.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: '0x279F' }],
+                            });
+                        } catch (switchError) {
+                            if (switchError.code === 4902) {
+                                await wallet.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{
+                                        chainId: '0x279F',
+                                        chainName: 'Monad Testnet',
+                                        nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+                                        rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                                        blockExplorerUrls: ['https://testnet.monadexplorer.com']
+                                    }],
+                                });
+                            }
+                        }
+                        provider = new ethers.providers.Web3Provider(wallet);
                     }
                 }
                 
-                await window.ethereum.request({ method: 'eth_requestAccounts' });
-                provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
                 contract = new ethers.Contract(CONTRACT, ABI, signer);
                 const addr = await signer.getAddress();
