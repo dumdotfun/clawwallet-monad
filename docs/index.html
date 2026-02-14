@@ -6,6 +6,7 @@
     <title>ClawWallet - AI Agent Wallets on Monad</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <script src="https://unpkg.com/@web3modal/cdn@5.1.8"></script>
     <style>
         body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
         .claw-gradient { background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%); }
@@ -29,9 +30,9 @@
         <div class="card rounded-2xl p-6 mb-8">
             <h2 class="text-xl font-bold mb-4">📋 Contract Info</h2>
             <div class="space-y-3 font-mono text-sm">
-                <div class="flex justify-between items-center p-3 bg-black/30 rounded-lg">
+                <div class="flex justify-between items-center p-3 bg-black/30 rounded-lg flex-wrap gap-2">
                     <span class="text-gray-400">Contract</span>
-                    <span class="text-green-400">0x00A99375c201E91e58257D67529D48846d32B854</span>
+                    <span class="text-green-400 break-all">0x00A99375c201E91e58257D67529D48846d32B854</span>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-black/30 rounded-lg">
                     <span class="text-gray-400">Network</span>
@@ -48,11 +49,11 @@
         <div class="card rounded-2xl p-6 mb-8">
             <h2 class="text-xl font-bold mb-4">🎮 Try It</h2>
             
-            <div class="mb-6">
+            <div class="mb-6 flex flex-wrap gap-3 items-center">
                 <button id="connectBtn" class="claw-gradient px-6 py-3 rounded-lg font-bold hover:opacity-90 transition">
                     Connect Wallet
                 </button>
-                <span id="walletStatus" class="ml-4 text-gray-400"></span>
+                <span id="walletStatus" class="text-gray-400"></span>
             </div>
 
             <div class="grid md:grid-cols-2 gap-6">
@@ -60,17 +61,18 @@
                 <div class="bg-black/30 p-4 rounded-xl">
                     <h3 class="font-bold mb-3">Create Agent Wallet</h3>
                     <input type="text" id="agentName" placeholder="Enter agent name" 
-                        class="w-full p-3 bg-black/50 rounded-lg mb-3 text-white">
+                        class="w-full p-3 bg-black/50 rounded-lg mb-3 text-white border border-gray-700 focus:border-pink-500 outline-none">
                     <button id="createBtn" class="w-full claw-gradient py-2 rounded-lg font-bold">
                         Create Wallet (Free!)
                     </button>
+                    <p id="createResult" class="mt-2 text-sm text-gray-400"></p>
                 </div>
 
                 <!-- Check Wallet -->
                 <div class="bg-black/30 p-4 rounded-xl">
                     <h3 class="font-bold mb-3">Check Agent Wallet</h3>
                     <input type="text" id="checkName" placeholder="Enter agent name" 
-                        class="w-full p-3 bg-black/50 rounded-lg mb-3 text-white">
+                        class="w-full p-3 bg-black/50 rounded-lg mb-3 text-white border border-gray-700 focus:border-blue-500 outline-none">
                     <button id="checkBtn" class="w-full bg-blue-600 py-2 rounded-lg font-bold hover:bg-blue-700">
                         Check Balance
                     </button>
@@ -131,7 +133,7 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
         </div>
 
         <!-- Links -->
-        <div class="text-center space-x-4">
+        <div class="text-center space-x-4 flex flex-wrap justify-center gap-3">
             <a href="https://github.com/dumdotfun/clawwallet-monad" target="_blank" 
                 class="inline-block px-6 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition">
                 📂 GitHub
@@ -152,6 +154,7 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
     <script>
         const CONTRACT = "0x00A99375c201E91e58257D67529D48846d32B854";
         const RPC = "https://testnet-rpc.monad.xyz";
+        const CHAIN_ID = 10143;
         const ABI = [
             "function createWallet(string calldata agentName) external returns (bytes32)",
             "function getWallet(bytes32 agentId) external view returns (bool exists, uint256 balance, uint256 points, uint256 totalSent, uint256 totalReceived, uint256 txCount)",
@@ -159,91 +162,133 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
         ];
 
         let provider, signer, contract;
+        const readProvider = new ethers.providers.JsonRpcProvider(RPC);
+        const readContract = new ethers.Contract(CONTRACT, ABI, readProvider);
 
+        // Connect button - try multiple methods
         document.getElementById('connectBtn').onclick = async () => {
-            // Support Phantom, MetaMask, or any injected wallet
+            const statusEl = document.getElementById('walletStatus');
+            const btnEl = document.getElementById('connectBtn');
+            
+            statusEl.textContent = 'Connecting...';
+            
+            // Try to find any available wallet
             const wallet = window.phantom?.ethereum || window.ethereum;
+            
             if (!wallet) {
-                alert('Please install a Web3 wallet (Phantom, MetaMask, etc.)');
+                statusEl.innerHTML = '❌ No wallet found. <a href="https://phantom.app/" target="_blank" class="text-pink-400 underline">Get Phantom</a> or <a href="https://metamask.io/" target="_blank" class="text-pink-400 underline">MetaMask</a>';
                 return;
             }
+            
             try {
-                await wallet.request({ method: 'eth_requestAccounts' });
-                provider = new ethers.providers.Web3Provider(wallet);
+                // Request accounts
+                const accounts = await wallet.request({ method: 'eth_requestAccounts' });
                 
-                // Check if on Monad testnet
+                if (!accounts || accounts.length === 0) {
+                    statusEl.textContent = '❌ No accounts found';
+                    return;
+                }
+                
+                provider = new ethers.providers.Web3Provider(wallet);
+                signer = provider.getSigner();
+                
+                // Check network
                 const network = await provider.getNetwork();
-                if (network.chainId !== 10143) {
-                    const addNetwork = confirm('Switch to Monad Testnet? (Chain ID: 10143)\n\nClick OK to add/switch, or Cancel to stay on current network.');
-                    if (addNetwork) {
+                if (network.chainId !== CHAIN_ID) {
+                    statusEl.innerHTML = `⚠️ Connected but on wrong network (${network.chainId}). Need Monad Testnet (${CHAIN_ID}). <button id="switchNetworkBtn" class="text-pink-400 underline">Switch</button>`;
+                    
+                    document.getElementById('switchNetworkBtn')?.addEventListener('click', async () => {
                         try {
                             await wallet.request({
                                 method: 'wallet_switchEthereumChain',
-                                params: [{ chainId: '0x279F' }],
+                                params: [{ chainId: '0x' + CHAIN_ID.toString(16) }],
                             });
-                        } catch (switchError) {
-                            if (switchError.code === 4902) {
+                            location.reload();
+                        } catch (e) {
+                            if (e.code === 4902) {
                                 await wallet.request({
                                     method: 'wallet_addEthereumChain',
                                     params: [{
-                                        chainId: '0x279F',
+                                        chainId: '0x' + CHAIN_ID.toString(16),
                                         chainName: 'Monad Testnet',
                                         nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
-                                        rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                                        rpcUrls: [RPC],
                                         blockExplorerUrls: ['https://testnet.monadexplorer.com']
                                     }],
                                 });
+                                location.reload();
                             }
                         }
-                        provider = new ethers.providers.Web3Provider(wallet);
-                    }
+                    });
+                } else {
+                    contract = new ethers.Contract(CONTRACT, ABI, signer);
+                    const addr = accounts[0];
+                    statusEl.textContent = `✅ ${addr.slice(0,6)}...${addr.slice(-4)} on Monad Testnet`;
+                    btnEl.textContent = '✅ Connected';
+                    btnEl.classList.remove('claw-gradient');
+                    btnEl.classList.add('bg-green-600');
                 }
-                
-                signer = provider.getSigner();
-                contract = new ethers.Contract(CONTRACT, ABI, signer);
-                const addr = await signer.getAddress();
-                document.getElementById('walletStatus').textContent = `Connected: ${addr.slice(0,6)}...${addr.slice(-4)}`;
-                document.getElementById('connectBtn').textContent = '✅ Connected';
             } catch (e) {
-                console.error(e);
-                alert('Connection failed: ' + (e.message || e));
+                console.error('Connection error:', e);
+                statusEl.textContent = '❌ ' + (e.message || 'Connection failed');
             }
         };
 
+        // Create wallet
         document.getElementById('createBtn').onclick = async () => {
-            const name = document.getElementById('agentName').value;
-            if (!name) { alert('Enter agent name'); return; }
-            if (!signer) { alert('Connect wallet first'); return; }
+            const name = document.getElementById('agentName').value.trim();
+            const resultEl = document.getElementById('createResult');
+            
+            if (!name) { 
+                resultEl.textContent = '❌ Enter agent name';
+                return; 
+            }
+            if (!signer) { 
+                resultEl.textContent = '❌ Connect wallet first';
+                return; 
+            }
+            
             try {
+                resultEl.textContent = '⏳ Creating wallet...';
                 const tx = await contract.createWallet(name);
-                alert(`Creating wallet... TX: ${tx.hash}`);
+                resultEl.innerHTML = `⏳ TX submitted: <a href="https://testnet.monadexplorer.com/tx/${tx.hash}" target="_blank" class="text-pink-400 underline">${tx.hash.slice(0,10)}...</a>`;
                 await tx.wait();
-                alert('Wallet created! 🦞');
+                resultEl.textContent = '✅ Wallet created! Check it below.';
             } catch (e) {
                 console.error(e);
-                alert('Error: ' + (e.reason || e.message));
+                resultEl.textContent = '❌ ' + (e.reason || e.message || 'Failed');
             }
         };
 
+        // Check wallet (works without connecting - uses read-only provider)
         document.getElementById('checkBtn').onclick = async () => {
-            const name = document.getElementById('checkName').value;
-            if (!name) { alert('Enter agent name'); return; }
+            const name = document.getElementById('checkName').value.trim();
+            const infoEl = document.getElementById('walletInfo');
+            
+            if (!name) { 
+                infoEl.innerHTML = '<div class="text-red-400">❌ Enter agent name</div>';
+                return; 
+            }
+            
             try {
-                const readProvider = new ethers.providers.JsonRpcProvider(RPC);
-                const readContract = new ethers.Contract(CONTRACT, ABI, readProvider);
+                infoEl.innerHTML = '<div class="text-gray-400">⏳ Checking...</div>';
                 const agentId = await readContract.getAgentId(name);
                 const wallet = await readContract.getWallet(agentId);
-                document.getElementById('walletInfo').innerHTML = wallet[0] 
-                    ? `<div class="bg-green-500/20 p-3 rounded-lg">
-                        <div>✅ Wallet exists</div>
-                        <div>Balance: ${ethers.utils.formatEther(wallet[1])} MON</div>
-                        <div>Points: ${wallet[2].toString()}</div>
-                        <div>TX Count: ${wallet[5].toString()}</div>
-                       </div>`
-                    : `<div class="bg-red-500/20 p-3 rounded-lg">❌ Wallet not found</div>`;
+                
+                if (wallet[0]) {
+                    infoEl.innerHTML = `
+                        <div class="bg-green-500/20 p-3 rounded-lg space-y-1">
+                            <div>✅ <strong>${name}</strong> exists</div>
+                            <div>💰 Balance: ${ethers.utils.formatEther(wallet[1])} MON</div>
+                            <div>⭐ Points: ${wallet[2].toString()}</div>
+                            <div>📊 TX Count: ${wallet[5].toString()}</div>
+                        </div>`;
+                } else {
+                    infoEl.innerHTML = `<div class="bg-yellow-500/20 p-3 rounded-lg">⚠️ Wallet "${name}" not found</div>`;
+                }
             } catch (e) {
                 console.error(e);
-                document.getElementById('walletInfo').innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
+                infoEl.innerHTML = `<div class="text-red-400">❌ ${e.message || 'Error checking wallet'}</div>`;
             }
         };
     </script>
