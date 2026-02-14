@@ -78,6 +78,42 @@
                     <div id="walletInfo" class="mt-3 text-sm text-gray-300"></div>
                 </div>
             </div>
+
+            <!-- Agent to Agent Transfer -->
+            <div class="mt-6 bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-4 rounded-xl border border-purple-500/30">
+                <h3 class="font-bold mb-3 flex items-center gap-2">
+                    <span class="text-xl">🤖↔️🤖</span> Agent-to-Agent Transfer
+                </h3>
+                <div class="grid md:grid-cols-3 gap-3 mb-3">
+                    <input type="text" id="fromAgent" placeholder="From agent name" 
+                        class="p-3 bg-black/50 rounded-lg text-white border border-gray-700 focus:border-purple-500 outline-none">
+                    <input type="text" id="toAgent" placeholder="To agent name" 
+                        class="p-3 bg-black/50 rounded-lg text-white border border-gray-700 focus:border-purple-500 outline-none">
+                    <input type="number" id="transferAmount" placeholder="Amount (MON)" step="0.001"
+                        class="p-3 bg-black/50 rounded-lg text-white border border-gray-700 focus:border-purple-500 outline-none">
+                </div>
+                <button id="transferBtn" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 py-2 rounded-lg font-bold hover:opacity-90">
+                    Send Between Agents
+                </button>
+                <p id="transferResult" class="mt-2 text-sm text-gray-400"></p>
+            </div>
+
+            <!-- Deposit to Agent -->
+            <div class="mt-4 bg-blue-500/10 p-4 rounded-xl border border-blue-500/30">
+                <h3 class="font-bold mb-3 flex items-center gap-2">
+                    <span class="text-xl">💸</span> Fund Agent Wallet
+                </h3>
+                <div class="grid md:grid-cols-2 gap-3 mb-3">
+                    <input type="text" id="depositAgent" placeholder="Agent name" 
+                        class="p-3 bg-black/50 rounded-lg text-white border border-gray-700 focus:border-blue-500 outline-none">
+                    <input type="number" id="depositAmount" placeholder="Amount (MON)" step="0.001"
+                        class="p-3 bg-black/50 rounded-lg text-white border border-gray-700 focus:border-blue-500 outline-none">
+                </div>
+                <button id="depositBtn" class="w-full bg-blue-600 py-2 rounded-lg font-bold hover:bg-blue-700">
+                    Deposit MON
+                </button>
+                <p id="depositResult" class="mt-2 text-sm text-gray-400"></p>
+            </div>
         </div>
 
         <!-- Features -->
@@ -157,7 +193,9 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
         const ABI = [
             "function createWallet(string calldata agentName) external returns (bytes32)",
             "function getWallet(bytes32 agentId) external view returns (bool exists, uint256 balance, uint256 points, uint256 totalSent, uint256 totalReceived, uint256 txCount)",
-            "function getAgentId(string calldata agentName) external pure returns (bytes32)"
+            "function getAgentId(string calldata agentName) external pure returns (bytes32)",
+            "function deposit(bytes32 agentId) external payable",
+            "function sendToAgent(bytes32 fromAgentId, bytes32 toAgentId, uint256 amount) external"
         ];
 
         let provider, signer, contract;
@@ -300,9 +338,13 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
                 const wallet = await readContract.getWallet(agentId);
                 
                 if (wallet[0]) {
+                    // Store agentId for deposit/transfer
+                    window.lastCheckedAgentId = agentId;
+                    window.lastCheckedName = name;
                     infoEl.innerHTML = `
-                        <div class="bg-green-500/20 p-3 rounded-lg space-y-1">
+                        <div class="bg-green-500/20 p-3 rounded-lg space-y-2">
                             <div>✅ <strong>${name}</strong> exists</div>
+                            <div class="text-xs font-mono break-all text-gray-400">ID: ${agentId}</div>
                             <div>💰 Balance: ${ethers.utils.formatEther(wallet[1])} MON</div>
                             <div>⭐ Points: ${wallet[2].toString()}</div>
                             <div>📊 TX Count: ${wallet[5].toString()}</div>
@@ -313,6 +355,75 @@ clawWallet.send(agentId, recipientAddress, amount);</code></pre>
             } catch (e) {
                 console.error(e);
                 infoEl.innerHTML = `<div class="text-red-400">❌ ${e.message || 'Error checking wallet'}</div>`;
+            }
+        };
+
+        // Agent to Agent Transfer
+        document.getElementById('transferBtn').onclick = async () => {
+            const from = document.getElementById('fromAgent').value.trim();
+            const to = document.getElementById('toAgent').value.trim();
+            const amount = document.getElementById('transferAmount').value;
+            const resultEl = document.getElementById('transferResult');
+            
+            if (!from || !to || !amount) {
+                resultEl.textContent = '❌ Fill in all fields';
+                return;
+            }
+            if (!signer) {
+                resultEl.textContent = '❌ Connect wallet first';
+                return;
+            }
+            
+            try {
+                resultEl.textContent = '⏳ Initiating transfer...';
+                const fromId = await readContract.getAgentId(from);
+                const toId = await readContract.getAgentId(to);
+                const amountWei = ethers.utils.parseEther(amount);
+                
+                const tx = await contract.sendToAgent(fromId, toId, amountWei);
+                resultEl.innerHTML = `⏳ TX: <a href="https://testnet.monadexplorer.com/tx/${tx.hash}" target="_blank" class="text-purple-400 underline">${tx.hash.slice(0,10)}...</a>`;
+                await tx.wait();
+                resultEl.textContent = `✅ Sent ${amount} MON from ${from} to ${to}!`;
+            } catch (e) {
+                console.error(e);
+                resultEl.textContent = '❌ ' + (e.reason || e.message || 'Transfer failed');
+            }
+        };
+
+        // Deposit to Agent
+        document.getElementById('depositBtn').onclick = async () => {
+            const agentName = document.getElementById('depositAgent').value.trim();
+            const amount = document.getElementById('depositAmount').value;
+            const resultEl = document.getElementById('depositResult');
+            
+            if (!agentName || !amount) {
+                resultEl.textContent = '❌ Enter agent name and amount';
+                return;
+            }
+            if (!signer) {
+                resultEl.textContent = '❌ Connect wallet first';
+                return;
+            }
+            
+            try {
+                resultEl.textContent = '⏳ Processing deposit...';
+                const agentId = await readContract.getAgentId(agentName);
+                const amountWei = ethers.utils.parseEther(amount);
+                
+                // Check if wallet exists first
+                const wallet = await readContract.getWallet(agentId);
+                if (!wallet[0]) {
+                    resultEl.textContent = `❌ Agent "${agentName}" doesn't exist. Create it first!`;
+                    return;
+                }
+                
+                const tx = await contract.deposit(agentId, { value: amountWei });
+                resultEl.innerHTML = `⏳ TX: <a href="https://testnet.monadexplorer.com/tx/${tx.hash}" target="_blank" class="text-blue-400 underline">${tx.hash.slice(0,10)}...</a>`;
+                await tx.wait();
+                resultEl.textContent = `✅ Deposited ${amount} MON to ${agentName}!`;
+            } catch (e) {
+                console.error(e);
+                resultEl.textContent = '❌ ' + (e.reason || e.message || 'Deposit failed');
             }
         };
     </script>
